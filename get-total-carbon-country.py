@@ -65,7 +65,7 @@ def carboncalculator(path, File_list, gdf):
                 """Append the value to the list"""
                 carbon_values.append(carbon_total)
 
-                print("\r", "the country {} is finished".format(row["ADM0_NAME"]), end="") #this is, so we delete the previous print
+                print("\r", "the country {} is finished".format(row["ADM0_NAME"]), end="") #with this method we dont accumulate messages
                 
         print("\r", "Finished calculating {} year raster".format(file_year), end="")
 
