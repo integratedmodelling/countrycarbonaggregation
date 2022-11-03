@@ -14,6 +14,7 @@ import rasterio
 import rasterio.mask
 import numpy as np
 import pandas as pd
+import math
 
 """
 Begin of functions' declaration.
@@ -76,7 +77,51 @@ def export_to_csv(country_polygons, aggregated_carbon_stocks):
 """
 Processing function.
 """
-    
+
+def area_of_pixel(pixel_size, center_lat):
+    """Calculate m^2 area of a wgs84 square pixel.
+
+    Adapted from: https://gis.stackexchange.com/a/127327/2397
+
+    Parameters:
+        pixel_size (float): length of side of pixel in degrees.
+        center_lat (float): latitude of the center of the pixel. Note this
+            value +/- half the `pixel-size` must not exceed 90/-90 degrees
+            latitude or an invalid area will be calculated.
+
+    Returns:
+        Area of square pixel of side length `pixel_size` centered at
+        `center_lat` in ha.
+
+    """
+    a = 6378137  # meters
+    b = 6356752.3142  # meters
+    e = math.sqrt(1 - (b/a)**2)
+    area_list = []
+    for f in [center_lat+pixel_size/2, center_lat-pixel_size/2]:
+        zm = 1 - e*math.sin(math.radians(f))
+        zp = 1 + e*math.sin(math.radians(f))
+        area_list.append(
+            math.pi * b**2 * (
+                math.log(zp/zm) / (2*e) +
+                math.sin(math.radians(f)) / (zp*zm)))
+    return (pixel_size / 360. * (area_list[0] - area_list[1])) * np.power(10,-4) 
+
+def get_raster_area(out_image, out_transform, pixel_size):
+        height = out_image.shape[2]
+        width = out_image.shape[1]
+        cols, rows = np.meshgrid(np.arange(width), np.arange(height))
+        xs, ys = rasterio.transform.xy(out_transform, rows, cols)
+        # longitudes= np.array(xs)
+        latitudes = np.array(ys)
+
+        real_raster_areas = np.zeros(latitudes)
+        for i, latitude_array in enumerate(latitudes):
+            for j, latitude in enumerate(latitude_array):
+                real_raster_areas[i,j] = area_of_pixel(pixel_size, latitude)
+
+        return real_raster_areas
+
 def carbon_stock_aggregation(raster_files_list, country_polygons):
     """
     carbon_stock_aggregation aggregates vegetation carbon stock data in Tonnes per Hectare and with a resolution of 300m at the country level. 
@@ -107,6 +152,9 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
 
         with rasterio.open(file) as raster_file: # Load the raster file.
 
+            gt = raster_file.transform # Get the raster properties on a list
+            pixel_size = gt[0] # 0 possition gets the x size, 4 possition gets the y size
+
             for row_index, row in country_polygons.iterrows(): # gdf.loc[0:1].iterrows():
                 # Iterate over the country polygons to progressively calculate the total carbon stock in each one of them.
                 
@@ -114,7 +162,11 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
 
                 out_image, out_transform = rasterio.mask.mask(raster_file, geo_row, crop=True) # Masks the raster over the current country.
                 
-                total_carbon_stock = np.nansum(out_image) # Sum all the carbon stock values in the country treating NaNs as 0.0. 
+                real_raster_areas = get_raster_area(out_image, out_transform, pixel_size)
+
+                total_carbon_stock_array = real_raster_areas * out_image
+
+                total_carbon_stock = np.nansum(total_carbon_stock_array) # Sum all the carbon stock values in the country treating NaNs as 0.0. 
                 
                 aggregated_carbon_stock_list.append(total_carbon_stock) # Add the aggregated stock to the list. 
 
@@ -123,11 +175,11 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
         print("Finished calculating {} year raster".format(file_year))
     
         # Transform the list to a DataFrame using the year as header.
-        aggregated_carbon_stock = pd.DataFrame(carbon_values, columns = [file_year]) 
+        aggregated_carbon_stock = pd.DataFrame(aggregated_carbon_stock_list, columns = [file_year]) 
 
-        # Join this year's carbon stocks to the final, multi-year DataFrame.
-        aggregated_carbon_stock_df = aggregated_carbon_stock_df.join(carbon_values_s)
-        
+        # Merge this year's carbon stocks to the final, multi-year DataFrame.
+        aggregated_carbon_stock_df = pd.merge(aggregated_carbon_stock_df, aggregated_carbon_stock, how='outer', left_index = True, right_index=True)
+
     return aggregated_carbon_stock_df
 
 """
@@ -157,7 +209,7 @@ vcs_rasters_list = get_raster_data(vcs_rasters_directory)
 country_polygons = load_country_polygons(country_polygons_file) 
 print("Data was loaded succesfully.")
 
-print("Starting aggregation process.)
+print("Starting aggregation process.")
 vcs_aggregated   = carbon_stock_aggregation(vcs_rasters_list, country_polygons) 
 print("Aggregation of vegetation carbon stocks at the country level finished.")
 export_to_csv(country_polygons, vcs_aggregated) 
