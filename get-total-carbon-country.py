@@ -4,7 +4,6 @@ import os
 import geopandas as gpd
 import rasterio
 import rasterio.mask
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -29,7 +28,7 @@ def getrasterfiles(path):
     return File_list
 
 def globaldataframe(globalmap):
-    """Create dataframe out of the vector data"""
+    """Create a dataframe out of the vector data"""
     gdf = gpd.read_file(globalmap)
     return gdf
 
@@ -40,7 +39,7 @@ def carboncalculator(path, File_list, gdf):
     """We set ourselves in the folder with the rasters"""
     os.chdir(path)
 
-    """Iterate the rasters"""
+    """Iterate over the rasters"""
     for file in File_list[:]:
         """Take the year of the file"""
         file_year = str(file[4:8])
@@ -52,11 +51,11 @@ def carboncalculator(path, File_list, gdf):
         """Open the raster"""
         with rasterio.open(file) as raster_file:
 
-            """Iterate on the gdf"""
+            """Iterate over the gdf"""
             for row_index, row in gdf.iterrows(): # gdf.loc[0:1].iterrows():
                 geo_row = gpd.GeoSeries(row['geometry'])
 
-                """Do the masking"""
+                """Mask the raster"""
                 out_image, out_transform = rasterio.mask.mask(raster_file, geo_row, crop=True)
 
                 """Sum the values ignoring the nan values"""
@@ -67,7 +66,7 @@ def carboncalculator(path, File_list, gdf):
 
                 print("\r", "the country {} is finished".format(row["ADM0_NAME"]), end="") #with this method we dont accumulate messages
                 
-        print("\r", "Finished calculating {} year raster".format(file_year), end="")
+        print("Finished calculating {} year raster".format(file_year))
 
         """Transform the list into a dataframe with the header of the year"""
         carbon_values_s = pd.DataFrame(carbon_values, columns = [file_year])
@@ -86,6 +85,10 @@ def outputdataframe(gdf, carbon_values_df):
     df_final = df_final.join(carbon_values_df)
         
     """Export the result"""
-    df_final.to_csv("total_carbon.csv")
+    df_final.to_csv("total_carbon_test.csv")
 
 
+getrasterfiles(path)
+globaldataframe(globalmap)
+carboncalculator(path, File_list, gdf)
+outputdataframe(gdf, carbon_values_df)
