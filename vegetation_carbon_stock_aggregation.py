@@ -37,7 +37,7 @@ def get_raster_data(path):
         # Iterate over all the files in the specified directory.
         if ".tif" in file:
             # Process the file if it has a .tif format.
-            address = path + file
+            address = os.path.join(path, file).replace("\\","/")
             if address not in file_list:
                 # Add the file address to the list if it had not been added before.
                 file_list.append(address)
@@ -108,7 +108,7 @@ def get_raster_area(baseline_raster, out_transform, pixel_size):
     get_raster_area creates a raster layer based on a reference layer (out_image), where the value of each tile corresponds to its true area in hectares.
     
     :param baseline_raster: is the baseline raster layer, in the context of this script the vegetation carbon stock raster.
-    :param out_transform: TODO: Ruben can you explain this?
+    :param out_transform: the Affine containing the transformation matrix with lattitude and longitude values, resolution...
     :param pixel_size: is the side lenght in degrees of each square raster tile.
 
     :return: a new raster layer where the value of each tile corresponds to its true area in hectares.
@@ -150,12 +150,10 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
     
     for file in raster_files_list[:]:
         # Iterate over all the raster files' addresses and extract the year from the address. 
-        # TODO: check if this works properly 
         filename_length = 24 # This is the number of characters in the raster file name if the convention "vcs_YYYY_global_300m.tif" is followed.
         start = len(file) - filename_length
         year_string_start = file.find("vcs_",start)
-        year_string_end   = file.find("_global_300m_.tif",start)
-        file_year = str( file[ year_string_start+4 : year_string_end ] )
+        file_year = str( file[ year_string_start + 4 : year_string_start + 8] )
         
         print("\r", "We are working with the file {} from the year {}".format(file, file_year), end="")
 
@@ -171,7 +169,9 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                 
                 geo_row = gpd.GeoSeries(row['geometry']) # This is the country's polygon geometry.
 
-                # Masks the raster over the current country, TODO: explain what is out_transform.
+                # Masks the raster over the current country. THe masking requires two outputs:
+                # out_image: the array of the masked image.
+                # out_transform: the Affine containing the transformation matrix with lat / long values, resolution...
                 out_image, out_transform = rasterio.mask.mask(raster_file, geo_row, crop=True) 
                 
                 # Create a global raster where each pixel's value corresponds to its true area in hectares.
@@ -210,15 +210,15 @@ Aggregation of vegetation carbon stock at the country level.
 Directory containing the raster files for the global carbon stock data at 300m resolution. This is the data to be aggregated by country.
 Note that the raster filenames must have the following structure: vcs_YYYY_global_300m.tif.
 """
-vcs_rasters_directory = r"\\akif.internal\public\veg_c_storage_rawdata\" # This is for Windows systems.
-# vcs_rasters_directory = r"akif.internal/public/veg_c_storage_rawdata/" # This is for Unix systems.
+
+vcs_rasters_directory = r"akif.internal/public/veg_c_storage_rawdata"
 
 """
 Full address of the shapefile containing the data on country borders for the entire world. This determines the country polygons 
 inside which the aggregation of carbon stocks is done. 
 """
-country_polygons_file = r"\\akif.internal\public\z_resources\im-wb\2015_gaul_dataset_mod_2015_gaul_dataset_gdba0000000b.shp" # This is for Windows systems.
-# country_polygons_file = r"akif.internal/public/z_resources/im-wb/2015_gaul_dataset_mod_2015_gaul_dataset_gdba0000000b.shp" # This is for Unix systems.
+
+country_polygons_file = r"akif.internal/public/z_resources/im-wb/2015_gaul_dataset_mod_2015_gaul_dataset_gdba0000000b.shp"
 
 print("Loading data.")
 vcs_rasters_list = get_raster_data(vcs_rasters_directory) 
