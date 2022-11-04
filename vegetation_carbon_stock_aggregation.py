@@ -55,13 +55,12 @@ def load_country_polygons(file):
     gdf = gpd.read_file(file)
     return gdf
 
-def export_to_csv(country_polygons, aggregated_carbon_stocks, suffix):
+def export_to_csv(country_polygons, aggregated_carbon_stocks):
     """
     export_to_csv creates a DataFrame where aggregated vegetation carbon stocks are associated to each country and exports this data in CSV format. 
     
     :param country_polygons: a GeoDataFrame storing the polygons corresponding to each country for the entire world.
     :param aggregated_carbon_stocks: a DataFrame storing the aggregated carbon stock values to be associated to each country.
-    :param file_year: string corresponding to the year of the aggregated_carbon_stocks.
     :return: None. The function creates a "total_carbon_test.csv" file in the current working directory that contains the total vegetation carbon stock for each country.
     """
     
@@ -73,27 +72,23 @@ def export_to_csv(country_polygons, aggregated_carbon_stocks, suffix):
     df_final = df_final.join(aggregated_carbon_stocks)
         
     # Export the result to the current working directory.
-    df_final.to_csv("total_carbon_{}.csv".format(suffix))
+    df_final.to_csv("total_carbon_test.csv")
 
 """
 Processing function.
 """
 
 def area_of_pixel(pixel_size, center_lat):
-    """Calculate m^2 area of a wgs84 square pixel.
-
-    Adapted from: https://gis.stackexchange.com/a/127327/2397
-
-    Parameters:
-        pixel_size (float): length of side of pixel in degrees.
-        center_lat (float): latitude of the center of the pixel. Note this
+    """
+    area_of_pixel calculates the area, in hectares, of a wgs84 square raster tile. 
+                  This function is adapted from https://gis.stackexchange.com/a/288034.
+    
+    :param pixel_size: is the length of side of pixel in degrees.
+    :param center_lat: is the latitude of the center of the pixel. Note this
             value +/- half the `pixel-size` must not exceed 90/-90 degrees
             latitude or an invalid area will be calculated.
 
-    Returns:
-        Area of square pixel of side length `pixel_size` centered at
-        `center_lat` in ha.
-
+    :return: the area of a square pixel of side length `pixel_size` centered at `center_lat` in hectares.
     """
     a = 6378137  # meters
     b = 6356752.3142  # meters
@@ -108,20 +103,35 @@ def area_of_pixel(pixel_size, center_lat):
                 math.sin(math.radians(f)) / (zp*zm)))
     return (pixel_size / 360. * (area_list[0] - area_list[1])) * np.power(10,-4) 
 
-def get_raster_area(out_image, out_transform, pixel_size):
-        height = out_image.shape[2]
-        width = out_image.shape[1]
-        cols, rows = np.meshgrid(np.arange(width), np.arange(height))
-        xs, ys = rasterio.transform.xy(out_transform, rows, cols)
-        # longitudes= np.array(xs)
-        latitudes = np.array(ys)
+def get_raster_area(baseline_raster, out_transform, pixel_size):
+    """
+    get_raster_area creates a raster layer based on a reference layer (out_image), where the value of each tile corresponds to its true area in hectares.
+    
+    :param baseline_raster: is the baseline raster layer, in the context of this script the vegetation carbon stock raster.
+    :param out_transform: TODO: Ruben can you explain this?
+    :param pixel_size: is the side lenght in degrees of each square raster tile.
 
-        real_raster_areas = np.zeros(latitudes)
-        for i, latitude_array in enumerate(latitudes):
-            for j, latitude in enumerate(latitude_array):
-                real_raster_areas[i,j] = area_of_pixel(pixel_size, latitude)
+    :return: a new raster layer where the value of each tile corresponds to its true area in hectares.
+    """    
+    
+    # Obtain the number of tiles in both directions.
+    height = baseline_raster.shape[2]
+    width  = baseline_raster.shape[1]
+    
+    # Create matrix of coordinates based in tile number.
+    cols, rows = np.meshgrid(np.arange(width), np.arange(height))
+   
+    # Transform the tile number coordinates to real coordinates and extract only latitude information. 
+    ys = rasterio.transform.xy(out_transform, rows, cols)[1]
+    latitudes = np.array(ys) # Cast the list of arrays to a 2D array for computational convenience.
 
-        return real_raster_areas
+    # Iterate over the latitudes matrix, calculate the area of each tile and store it in the real_raster_areas array.
+    real_raster_areas = np.zeros(latitudes)
+    for i, latitude_array in enumerate(latitudes):
+        for j, latitude in enumerate(latitude_array):
+            real_raster_areas[i,j] = area_of_pixel(pixel_size, latitude)
+
+    return real_raster_areas
 
 def carbon_stock_aggregation(raster_files_list, country_polygons):
     """
@@ -131,7 +141,7 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                              rasters corresponding to different years.
     
     :param raster_files_list: a list containing the addresses of all the raster files that store the vegetation carbon stock data for each year.
-    :country_polygons: a GeoDataFrame storing the polygons corresponding to each country for the entire world.
+    :param country_polygons: a GeoDataFrame storing the polygons corresponding to each country for the entire world.
     :return: a DataFrame storing the aggregated vegetation carbon stocks at the country level for each year.
     """
     
@@ -153,23 +163,28 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
 
         with rasterio.open(file) as raster_file: # Load the raster file.
 
-            gt = raster_file.transform # Get the raster properties on a list
-            pixel_size = gt[0] # 0 possition gets the x size, 4 possition gets the y size
+            gt = raster_file.transform # Get all the raster properties on a list.
+            pixel_size = gt[0] # X size is stored in position 0, Y size is stored in position 4.
 
             for row_index, row in country_polygons.iterrows(): # gdf.loc[0:1].iterrows():
                 # Iterate over the country polygons to progressively calculate the total carbon stock in each one of them.
                 
                 geo_row = gpd.GeoSeries(row['geometry']) # This is the country's polygon geometry.
 
-                out_image, out_transform = rasterio.mask.mask(raster_file, geo_row, crop=True) # Masks the raster over the current country.
+                # Masks the raster over the current country, TODO: explain what is out_transform.
+                out_image, out_transform = rasterio.mask.mask(raster_file, geo_row, crop=True) 
                 
-                real_raster_areas = get_raster_area(out_image, out_transform, pixel_size)
+                # Create a global raster where each pixel's value corresponds to its true area in hectares.
+                real_raster_areas = get_raster_area(out_image, out_transform, pixel_size) 
 
+                # Calculate the total carbon stock in each tile: tonnes/hectare * hectares = tonnes.    
                 total_carbon_stock_array = real_raster_areas * out_image
 
-                total_carbon_stock = np.nansum(total_carbon_stock_array) # Sum all the carbon stock values in the country treating NaNs as 0.0. 
+                # Sum all the carbon stock values in the country treating NaNs as 0.0. 
+                total_carbon_stock = np.nansum(total_carbon_stock_array) 
                 
-                aggregated_carbon_stock_list.append(total_carbon_stock) # Add the aggregated stock to the list. 
+                # Add the aggregated stock to the list.
+                aggregated_carbon_stock_list.append(total_carbon_stock)  
 
                 print("\r", "the country {} is finished".format(row["ADM0_NAME"]), end="") 
                 
@@ -180,8 +195,6 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
 
         # Merge this year's carbon stocks to the final, multi-year DataFrame.
         aggregated_carbon_stock_df = pd.merge(aggregated_carbon_stock_df, aggregated_carbon_stock, how='outer', left_index = True, right_index=True)
-
-        export_to_csv(country_polygons, aggregated_carbon_stock, file_year)
 
     return aggregated_carbon_stock_df
 
@@ -215,5 +228,5 @@ print("Data was loaded succesfully.")
 print("Starting aggregation process.")
 vcs_aggregated   = carbon_stock_aggregation(vcs_rasters_list, country_polygons) 
 print("Aggregation of vegetation carbon stocks at the country level finished.")
-export_to_csv(country_polygons, vcs_aggregated, "2001_to_2020") 
+export_to_csv(country_polygons, vcs_aggregated) 
 print("Total vegetation carbon stocks at the country level succesfully exported.")
