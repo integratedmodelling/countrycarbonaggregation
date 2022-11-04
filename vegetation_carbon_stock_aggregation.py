@@ -55,12 +55,13 @@ def load_country_polygons(file):
     gdf = gpd.read_file(file)
     return gdf
 
-def export_to_csv(country_polygons, aggregated_carbon_stocks):
+def export_to_csv(country_polygons, aggregated_carbon_stocks, suffix):
     """
     export_to_csv creates a DataFrame where aggregated vegetation carbon stocks are associated to each country and exports this data in CSV format. 
     
     :param country_polygons: a GeoDataFrame storing the polygons corresponding to each country for the entire world.
     :param aggregated_carbon_stocks: a DataFrame storing the aggregated carbon stock values to be associated to each country.
+    :param file_year: string corresponding to the year of the aggregated_carbon_stocks.
     :return: None. The function creates a "total_carbon_test.csv" file in the current working directory that contains the total vegetation carbon stock for each country.
     """
     
@@ -72,7 +73,7 @@ def export_to_csv(country_polygons, aggregated_carbon_stocks):
     df_final = df_final.join(aggregated_carbon_stocks)
         
     # Export the result to the current working directory.
-    df_final.to_csv("total_carbon_test.csv")
+    df_final.to_csv("total_carbon_{}.csv".format(suffix))
 
 """
 Processing function.
@@ -180,6 +181,8 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
         # Merge this year's carbon stocks to the final, multi-year DataFrame.
         aggregated_carbon_stock_df = pd.merge(aggregated_carbon_stock_df, aggregated_carbon_stock, how='outer', left_index = True, right_index=True)
 
+        export_to_csv(country_polygons, aggregated_carbon_stock, file_year)
+
     return aggregated_carbon_stock_df
 
 """
@@ -212,5 +215,5 @@ print("Data was loaded succesfully.")
 print("Starting aggregation process.")
 vcs_aggregated   = carbon_stock_aggregation(vcs_rasters_list, country_polygons) 
 print("Aggregation of vegetation carbon stocks at the country level finished.")
-export_to_csv(country_polygons, vcs_aggregated) 
+export_to_csv(country_polygons, vcs_aggregated, "2001_to_2020") 
 print("Total vegetation carbon stocks at the country level succesfully exported.")
