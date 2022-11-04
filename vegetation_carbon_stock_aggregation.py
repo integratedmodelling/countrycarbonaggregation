@@ -52,6 +52,7 @@ def load_country_polygons(file):
     :param file: the adress of the shapefile with the country border data.
     :return: a GeoDataFrame with country border data. 
     """
+    file = file.replace("\\","/")
     gdf = gpd.read_file(file)
     return gdf
 
@@ -211,14 +212,14 @@ Directory containing the raster files for the global carbon stock data at 300m r
 Note that the raster filenames must have the following structure: vcs_YYYY_global_300m.tif.
 """
 
-vcs_rasters_directory = r"akif.internal/public/veg_c_storage_rawdata"
+vcs_rasters_directory = r"\\akif.internal\public\veg_c_storage_rawdata\\" # Both Windows and Unix types of path writing are supported. 
 
 """
 Full address of the shapefile containing the data on country borders for the entire world. This determines the country polygons 
 inside which the aggregation of carbon stocks is done. 
 """
 
-country_polygons_file = r"akif.internal/public/z_resources/im-wb/2015_gaul_dataset_mod_2015_gaul_dataset_gdba0000000b.shp"
+country_polygons_file = r"\\akif.internal\public\z_resources\im-wb\2015_gaul_dataset_mod_2015_gaul_dataset_gdba0000000b.shp"
 
 print("Loading data.")
 vcs_rasters_list = get_raster_data(vcs_rasters_directory) 
