@@ -15,6 +15,7 @@ import rasterio.mask
 import numpy as np
 import pandas as pd
 import math
+import platform
 
 """
 Begin of functions' declaration.
@@ -37,12 +38,18 @@ def get_raster_data(path):
         # Iterate over all the files in the specified directory.
         if ".tif" in file:
             # Process the file if it has a .tif format.
-            address = os.path.join(path, file).replace("\\","/")
+            if platform.system() is "Windows":
+                address = os.path.join(path, file).replace("/","\\")
+            else:
+                address = os.path.join(path, file).replace("\\","/")
+                #build the path according the OS running the script
+
             if address not in file_list:
                 # Add the file address to the list if it had not been added before.
                 file_list.append(address)
         else:
             pass
+    # print(file_list)
     return file_list
 
 def load_country_polygons(file):
@@ -52,7 +59,12 @@ def load_country_polygons(file):
     :param file: the adress of the shapefile with the country border data.
     :return: a GeoDataFrame with country border data. 
     """
-    file = file.replace("\\","/")
+    if platform.system() is "Windows":
+        file = file.replace("/","\\")
+    else:
+        file = file.replace("\\","/")
+        #build the path according the OS running the script
+
     gdf = gpd.read_file(file)
     return gdf
 
@@ -73,7 +85,7 @@ def export_to_csv(country_polygons, aggregated_carbon_stocks):
     df_final = df_final.join(aggregated_carbon_stocks)
         
     # Export the result to the current working directory.
-    df_final.to_csv("total_carbon_test.csv")
+    df_final.to_csv("total_carbon.csv")
 
 """
 Processing function.
@@ -102,7 +114,7 @@ def area_of_pixel(pixel_size, center_lat):
             math.pi * b**2 * (
                 math.log(zp/zm) / (2*e) +
                 math.sin(math.radians(f)) / (zp*zm)))
-    return (pixel_size / 360. * (area_list[0] - area_list[1])) * np.power(10,-4) 
+    return (pixel_size / 360. * (area_list[0] - area_list[1])) * np.power(10.0,-4) 
 
 def get_raster_area(baseline_raster, out_transform, pixel_size):
     """
@@ -127,7 +139,7 @@ def get_raster_area(baseline_raster, out_transform, pixel_size):
     latitudes = np.array(ys) # Cast the list of arrays to a 2D array for computational convenience.
 
     # Iterate over the latitudes matrix, calculate the area of each tile and store it in the real_raster_areas array.
-    real_raster_areas = np.zeros(latitudes)
+    real_raster_areas = np.empty(np.shape(latitudes))
     for i, latitude_array in enumerate(latitudes):
         for j, latitude in enumerate(latitude_array):
             real_raster_areas[i,j] = area_of_pixel(pixel_size, latitude)
@@ -179,7 +191,7 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                 real_raster_areas = get_raster_area(out_image, out_transform, pixel_size) 
 
                 # Calculate the total carbon stock in each tile: tonnes/hectare * hectares = tonnes.    
-                total_carbon_stock_array = real_raster_areas * out_image
+                total_carbon_stock_array = real_raster_areas * np.transpose(out_image[0,:,:])
 
                 # Sum all the carbon stock values in the country treating NaNs as 0.0. 
                 total_carbon_stock = np.nansum(total_carbon_stock_array) 
@@ -212,7 +224,7 @@ Directory containing the raster files for the global carbon stock data at 300m r
 Note that the raster filenames must have the following structure: vcs_YYYY_global_300m.tif.
 """
 
-vcs_rasters_directory = r"\\akif.internal\public\veg_c_storage_rawdata\\" # Both Windows and Unix types of path writing are supported. 
+vcs_rasters_directory = r"\\akif.internal\public\veg_c_storage_rawdata" # Both Windows and Unix types of path writing are supported. 
 
 """
 Full address of the shapefile containing the data on country borders for the entire world. This determines the country polygons 
