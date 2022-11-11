@@ -163,7 +163,7 @@ def get_total_carbon_stock(out_image, out_transform, pixel_size, width_0, height
     cols, rows = np.meshgrid(np.arange(width_0, width_1), np.arange(height_0, height_1))
     
     # Transform the tile number coordinates to real coordinates and extract only latitude information. 
-    ys = rasterio.transform.xy(out_transform, rows, cols)[1]
+    ys = rasterio.transform.xy(out_transform, rows, cols)[1] # [0] is xs
     latitudes = np.array(ys) # Cast the list of arrays to a 2D array for computational convenience.
 
     # Iterate over the latitudes matrix, calculate the area of each tile and store it in the real_raster_areas array.
@@ -173,7 +173,7 @@ def get_total_carbon_stock(out_image, out_transform, pixel_size, width_0, height
             real_raster_areas[i,j] = area_of_pixel(pixel_size, latitude)
 
     # Calculate the total carbon stock in each tile: tonnes/hectare * hectares = tonnes.    
-    total_carbon_stock_array = real_raster_areas * out_image[0,width_0:width_1,height_0:height_1] #I don't think np.transpose() is necesary
+    total_carbon_stock_array = real_raster_areas * out_image[0,height_0:height_1,width_0:width_1] #I don't think np.transpose() is necesary
 
     # Sum all the carbon stock values in the country treating NaNs as 0.0. 
     total_carbon_stock = np.nansum(total_carbon_stock_array) 
@@ -202,7 +202,7 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
         year_string_start = file.find("vcs_",start)
         file_year = str( file[ year_string_start + 4 : year_string_start + 8] )
         
-        print("\r", "We are working with the file {} from the year {}".format(file, file_year), end="")
+        print("We are working with the file {} from the year {}".format(file, file_year))
 
         aggregated_carbon_stock_list = [] # This list will store the results from the aggregation. 
 
@@ -238,7 +238,7 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                 # Add the aggregated stock to the list.
                 aggregated_carbon_stock_list.append(total_carbon_stock)  
 
-                print("\r", "the country {} is finished".format(row["ADM0_NAME"]), end="") 
+                print("the country {} is finished".format(row["ADM0_NAME"]))
                 
         print("Finished calculating {} year raster".format(file_year))
     
