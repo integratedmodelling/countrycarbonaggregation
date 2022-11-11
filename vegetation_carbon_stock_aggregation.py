@@ -116,24 +116,52 @@ def area_of_pixel(pixel_size, center_lat):
                 math.sin(math.radians(f)) / (zp*zm)))
     return (pixel_size / 360. * (area_list[0] - area_list[1])) * np.power(10.0,-4) 
 
-def get_raster_area(baseline_raster, out_transform, pixel_size):
+def raster_tiling(out_image, out_transform, pixel_size, width, height):
     """
-    get_raster_area creates a raster layer based on a reference layer (out_image), where the value of each tile corresponds to its true area in hectares.
+    raster_tiling is called when the output of the masking raster exceeds the 5Gb storage. To not get memory issues, we split the masked raster in tiles of 1000x1000, and calculate the total carbon stock, acumulating the value of the total carbon for every tile.
     
-    :param baseline_raster: is the baseline raster layer, in the context of this script the vegetation carbon stock raster.
+    :param out_image: is the masked raster layer, in the context of this script the vegetation carbon stock raster.
+    :param out_transform: the Affine containing the transformation matrix with lattitude and longitude values, resolution...
+    :param pixel_size: is the side lenght in degrees of each square raster tile.
+    :param width: is the width of the masked layer.
+    :param height: is the height of the masked layer.
+
+    :return: a new raster layer where the value of each tile corresponds to its true area in hectares.
+    """
+
+    tilesize = 1000
+    total_acumulated_carbon_stock = 0
+
+    for i in range(0, width, tilesize): #tilesize marks from where to where in width
+        for j in range(0, height, tilesize):
+            #this is for the edge parts, so we don't get nodata from the borders
+            w0 = i #start of the array
+            w_plus = min(i+tilesize, width) - i #addition value
+            w1 = w0 + w_plus #end of the array
+            h0 = j #start of the array
+            h_plus = min(j+tilesize, height) - j #addition value
+            h1 = h0 + h_plus #end of the array
+
+            total_carbon_stock = get_total_carbon_stock(out_image, out_transform, pixel_size, w0, h0, w1, h1)
+
+            total_acumulated_carbon_stock += total_carbon_stock
+
+    return total_acumulated_carbon_stock
+
+def get_total_carbon_stock(out_image, out_transform, pixel_size, width_0, height_0, width_1, height_1):
+    """
+    get_total_carbon_stock creates a raster layer based on a reference layer (out_image), where the value of each tile corresponds to its true area in hectares.
+    
+    :param out_image: is the baseline raster layer, in the context of this script the vegetation carbon stock raster.
     :param out_transform: the Affine containing the transformation matrix with lattitude and longitude values, resolution...
     :param pixel_size: is the side lenght in degrees of each square raster tile.
 
     :return: a new raster layer where the value of each tile corresponds to its true area in hectares.
-    """    
-    
-    # Obtain the number of tiles in both directions.
-    height = baseline_raster.shape[2]
-    width  = baseline_raster.shape[1]
+    """
     
     # Create matrix of coordinates based in tile number.
-    cols, rows = np.meshgrid(np.arange(width), np.arange(height))
-   
+    cols, rows = np.meshgrid(np.arange(width_0, width_1), np.arange(height_0, height_1))
+    
     # Transform the tile number coordinates to real coordinates and extract only latitude information. 
     ys = rasterio.transform.xy(out_transform, rows, cols)[1]
     latitudes = np.array(ys) # Cast the list of arrays to a 2D array for computational convenience.
@@ -144,7 +172,13 @@ def get_raster_area(baseline_raster, out_transform, pixel_size):
         for j, latitude in enumerate(latitude_array):
             real_raster_areas[i,j] = area_of_pixel(pixel_size, latitude)
 
-    return real_raster_areas
+    # Calculate the total carbon stock in each tile: tonnes/hectare * hectares = tonnes.    
+    total_carbon_stock_array = real_raster_areas * out_image[0,width_0:width_1,height_0:height_1] #I don't think np.transpose() is necesary
+
+    # Sum all the carbon stock values in the country treating NaNs as 0.0. 
+    total_carbon_stock = np.nansum(total_carbon_stock_array) 
+
+    return total_carbon_stock
 
 def carbon_stock_aggregation(raster_files_list, country_polygons):
     """
@@ -183,18 +217,23 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                 geo_row = gpd.GeoSeries(row['geometry']) # This is the country's polygon geometry.
 
                 # Masks the raster over the current country. THe masking requires two outputs:
-                # out_image: the array of the masked image.
+                # out_image: the array of the masked image. [z, y, x]
                 # out_transform: the Affine containing the transformation matrix with lat / long values, resolution...
                 out_image, out_transform = rasterio.mask.mask(raster_file, geo_row, crop=True) 
                 
-                # Create a global raster where each pixel's value corresponds to its true area in hectares.
-                real_raster_areas = get_raster_area(out_image, out_transform, pixel_size) 
+                # Obtain the number of tiles in both directions.
+                height = out_image.shape[1]
+                width  = out_image.shape[2]
 
-                # Calculate the total carbon stock in each tile: tonnes/hectare * hectares = tonnes.    
-                total_carbon_stock_array = real_raster_areas * np.transpose(out_image[0,:,:])
+                #check the size of the raster image
+                if out_image.nbytes > (5* 10**9):
+                    print("the country {} exceeds 5Gb of memory, we will split the array in tiles of 1000. Current size is GB: {} ".format(row["ADM0_NAME"], (out_image.nbytes) / np.power(10.0,9)))
 
-                # Sum all the carbon stock values in the country treating NaNs as 0.0. 
-                total_carbon_stock = np.nansum(total_carbon_stock_array) 
+                    total_carbon_stock = raster_tiling(out_image, out_transform, pixel_size, width, height)
+
+                else:
+                    # Create a global raster where each pixel's value corresponds to its true area in hectares.
+                    total_carbon_stock = get_total_carbon_stock(out_image, out_transform, pixel_size, 0, 0, width, height) 
                 
                 # Add the aggregated stock to the list.
                 aggregated_carbon_stock_list.append(total_carbon_stock)  
