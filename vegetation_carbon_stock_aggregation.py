@@ -226,8 +226,8 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                 width  = out_image.shape[2]
 
                 #check the size of the raster image
-                if out_image.nbytes > (5* 10**9):
-                    print("the country {} exceeds 5Gb of memory, we will split the array in tiles of 1000. Current size is GB: {} ".format(row["ADM0_NAME"], (out_image.nbytes) / np.power(10.0,9)))
+                if out_image.nbytes > (3* 10**9):
+                    print("the country {} exceeds 3Gb of memory, we will split the array in tiles of 1000. Current size is GB: {} ".format(row["ADM0_NAME"], (out_image.nbytes) / np.power(10.0,9)))
 
                     total_carbon_stock = raster_tiling(out_image, out_transform, pixel_size, width, height)
 
