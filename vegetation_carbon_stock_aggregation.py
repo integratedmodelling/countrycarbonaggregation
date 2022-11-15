@@ -248,6 +248,9 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
         # Merge this year's carbon stocks to the final, multi-year DataFrame.
         aggregated_carbon_stock_df = pd.merge(aggregated_carbon_stock_df, aggregated_carbon_stock, how='outer', left_index = True, right_index=True)
 
+        #export the carbon stock year as a backup 
+        aggregated_carbon_stock.to_csv("carbon_stock_{}.csv".format(file_year))
+
     return aggregated_carbon_stock_df
 
 """
@@ -270,7 +273,7 @@ Full address of the shapefile containing the data on country borders for the ent
 inside which the aggregation of carbon stocks is done. 
 """
 
-country_polygons_file = r"\\akif.internal\public\z_resources\im-wb\2015_gaul_dataset_mod_2015_gaul_dataset_gdba0000000b.shp"
+country_polygons_file = r"\\akif.internal\public\z_resources\im-wb\2015_gaul_dataset_mod_2015_gaul_dataset_global_countries_1.shp"
 
 print("Loading data.")
 vcs_rasters_list = get_raster_data(vcs_rasters_directory) 
