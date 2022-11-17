@@ -85,7 +85,7 @@ def export_to_csv(country_polygons, aggregated_carbon_stocks):
     df_final = df_final.join(aggregated_carbon_stocks)
         
     # Export the result to the current working directory.
-    df_final.to_csv("total_carbon_1.csv")
+    df_final.to_csv("total_carbon.csv")
 
 """
 Processing function.
@@ -195,7 +195,7 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
     # Final DataFrame will store the aggregated carbon stocks for each country and each year. 
     aggregated_carbon_stock_df = pd.DataFrame([])
     
-    for file in raster_files_list[10:]:
+    for file in raster_files_list[:]: # [10:]
         # Iterate over all the raster files' addresses and extract the year from the address. 
         filename_length = 24 # This is the number of characters in the raster file name if the convention "vcs_YYYY_global_300m.tif" is followed.
         start = len(file) - filename_length
