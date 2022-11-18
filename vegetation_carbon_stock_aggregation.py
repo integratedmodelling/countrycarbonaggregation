@@ -116,7 +116,7 @@ def area_of_pixel(pixel_size, center_lat):
                 math.sin(math.radians(f)) / (zp*zm)))
     return (pixel_size / 360. * (area_list[0] - area_list[1])) * np.power(10.0,-4) 
 
-def raster_tiling(out_image, out_transform, pixel_size, width, height):
+def carbon_stock_raster_tiling(out_image, out_transform, pixel_size, width, height):
     """
     raster_tiling is called when the output of the masking raster exceeds the 3Gb storage. To not get memory issues, we split the masked raster in tiles of 1000x1000, and calculate the total carbon stock, accumulating the value of the total carbon for every tile.
     
@@ -229,7 +229,7 @@ def carbon_stock_aggregation(raster_files_list, country_polygons):
                 if out_image.nbytes > (3* 10**9):
                     print("the country {} exceeds 3Gb of memory, we will split the array in tiles of 1000. Current size is GB: {} ".format(row["ADM0_NAME"], (out_image.nbytes) / np.power(10.0,9)))
 
-                    total_carbon_stock = raster_tiling(out_image, out_transform, pixel_size, width, height)
+                    total_carbon_stock = carbon_stock_raster_tiling(out_image, out_transform, pixel_size, width, height)
 
                 else:
                     # Create a global raster where each pixel's value corresponds to its true area in hectares.
