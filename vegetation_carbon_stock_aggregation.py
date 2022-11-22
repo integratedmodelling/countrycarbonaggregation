@@ -57,7 +57,7 @@ def load_country_polygons(file):
     load_country_polygons loads a shapefile containing vector data of country borders for the entire world as a GeoDataFrame.
     
     :param file: the address of the shapefile with the country border data.
-    :return: a GeoDataFrame with country border data. 
+    :return: a GeoDataFrame with the data on the countries' polygons. 
     """
     if platform.system() is "Windows":
         file = file.replace("/","\\")
@@ -101,7 +101,7 @@ def area_of_pixel(pixel_size, center_lat):
             value +/- half the `pixel-size` must not exceed 90/-90 degrees
             latitude or an invalid area will be calculated.
 
-    :return: the area of a square pixel of side length `pixel_size` centered at `center_lat` in hectares.
+    :return: the area of a square pixel of side length `pixel_size` whose center is at latitude `center_lat` in hectares.
     """
     a = 6378137  # meters
     b = 6356752.3142  # meters
@@ -126,7 +126,7 @@ def carbon_stock_raster_tiling(out_image, out_transform, pixel_size, width, heig
     :param width: is the width of the masked layer.
     :param height: is the height of the masked layer.
 
-    :return: a new raster layer where the value of each tile corresponds to its proper area in hectares.
+    :return: the value of the total carbon stock for the country
     """
 
     tilesize = 1000
@@ -155,8 +155,12 @@ def get_total_carbon_stock(out_image, out_transform, pixel_size, width_0, height
     :param out_image: is the baseline raster layer, in the context of this script the vegetation carbon stock raster.
     :param out_transform: the Affine containing the transformation matrix with latitude and longitude values, resolution...
     :param pixel_size: is the side length in degrees of each square raster tile.
-
-    :return: a new raster layer where the value of each tile corresponds to its proper area in hectares.
+    :param width_0: is the starting value position of the width array
+    :param height_0: is the starting value position of the height array
+    :param width_1: is the end value position of the width array
+    :param height_1: is the end value position of the height array
+    
+    :return: the total carbon stock extracted from the raster.
     """
     
     # Create a matrix of coordinates based on tile number.
