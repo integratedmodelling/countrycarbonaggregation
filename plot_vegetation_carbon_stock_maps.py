@@ -105,11 +105,11 @@ def vcs_differences(gdf, init_year, last_year, time_interval):
 
     diff_gdf = gdf[["name","geometry"]]
     for y0,y1 in years:
-        diff_gdf[str(y1)+"-"+str(y0)] = 100*(gdf[str(y1)]-gdf[str(y0)])/gdf[str(y0)]
+        diff_gdf[str(y0)+"-"+str(y1)] = 100*(gdf.loc[:,str(y1)]-gdf.loc[:,str(y0)])/gdf.loc[:,str(y0)]
 
     return diff_gdf
 
-def get_winners_and_losers(gdf, init_year, last_year):
+def get_winners_and_losers(gdf, n, init_year, last_year):
     """
     Gets the top 10 winner/loser countries in terms of changes in vegetation
     carbon stock between two years.
@@ -122,8 +122,8 @@ def get_winners_and_losers(gdf, init_year, last_year):
 
     diff = vcs_differences(gdf, init_year, last_year, last_year - init_year)
 
-    winners = diff[ diff[str(init_year)+"-"+str(last_year)].max(10) ].name
-    losers  = diff[ diff[str(init_year)+"-"+str(last_year)].min(10) ].name
+    winners = diff.nlargest(n,[str(init_year)+"-"+str(last_year)]).name
+    losers  = diff.nsmallest(n,[str(init_year)+"-"+str(last_year)]).name
 
     return (winners,losers)
 
@@ -137,24 +137,36 @@ def plot_vcs_dynamics(gdf, countries):
     """
 
     # Restrict the dataset to the specified countries.
-    gdf = gdf[ gdf.names == countries ]
+    gdf = gdf[ gdf.name.isin(countries) ]
 
     # Drop the geometry column.
     gdf = gdf.drop(columns=["geometry"])
 
+    # Calculate relative change with respect to initial year.
+    list_of_years = ["2001","2002","2003","2004","2005"]
+    gdf[list_of_years] = gdf[list_of_years].div(gdf["2001"], axis=0)*100-100
+
     # Tidy the dataframe.
     gdf = pd.melt(gdf, id_vars="name", var_name="year", value_name="vcs")
+    gdf = gdf.rename(columns={"name": "Country"})
 
-    fig, ax = plt.subplots(1, 1)
+    # fig, ax = plt.subplots(1, 1)
 
     # Create the figure.
-    sns.relplot(data=gdf,
-                ax=ax,
+    sns.set_style("darkgrid", {"axes.facecolor": "0.95"})
+    palette = sns.color_palette("pastel")
+    g = sns.relplot(data=gdf,
+                # ax=ax,
                 x="year", y="vcs",
-                hue="name",
+                hue="Country",
                 kind="line",
-                markers=True
+                marker='o',
+                palette=palette
     )
+    g.axes[0,0].set_xlabel("Year")
+    g.axes[0,0].set_ylabel("Relative Percentual Change of \n Vegetation Carbon Stock")
+
+    plt.show()
 
 
 def plot_vcs_map(gdf, year, vcs_range):
@@ -227,6 +239,8 @@ def plot_carbon_stock_distribution(gdf,year):
                 cut=0
     )
 
+    plt.show()
+
 
 def plot_difference_vs_average(gdf, init_year, last_year):
     """
@@ -259,8 +273,13 @@ file_list = get_vcs_filenames("./temp_data/")
 vcs_df = merge_vcs_all_years(file_list)
 countries_gdf = load_countries_polygon_data("./temp_data/2015_gaul_dataset_mod_2015_gaul_dataset_global_countries_1.shp")
 gdf = join_vcs_with_country(vcs_df,countries_gdf)
-diff_all = vcs_differences(gdf,2001,2005,5)
-
+diff_all = vcs_differences(gdf,2001,2005,4)
+print(diff_all)
+winners, losers = get_winners_and_losers(gdf,5,2001,2005)
+print(winners)
+print(losers)
+plot_vcs_dynamics(gdf,winners)
+plot_vcs_dynamics(gdf,losers)
 
 #
 # def plot_vcs_per_year(vcs_files, countries_gdf):
