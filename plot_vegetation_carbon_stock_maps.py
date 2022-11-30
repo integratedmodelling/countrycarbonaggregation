@@ -7,6 +7,7 @@ import pandas as pd
 import math
 import platform
 from matplotlib import pyplot as plt
+import matplotlib.colors as colors
 import seaborn as sns
 
 def get_vcs_filenames(path):
@@ -84,7 +85,7 @@ def join_vcs_with_country(vcs_df, countries_gdf):
     """
     joined = vcs_df.merge(countries_gdf, on="cid")
     joined = joined.drop("cid",axis=1)
-    print(joined)
+    # print(joined)
     return joined
 
 def vcs_differences(gdf, init_year, last_year, time_interval):
@@ -153,7 +154,7 @@ def plot_vcs_dynamics(gdf, countries):
     # fig, ax = plt.subplots(1, 1)
 
     # Create the figure.
-    sns.set_style("darkgrid", {"axes.facecolor": "0.95"})
+    sns.set_style("darkgrid", {"axes.facecolor": "0.925"})
     palette = sns.color_palette("pastel")
     g = sns.relplot(data=gdf,
                 # ax=ax,
@@ -179,19 +180,21 @@ def plot_vcs_map(gdf, year, vcs_range):
     :return: a global map of the vegetation carbon stocks for the specified year.
     """
 
-    gdf = gdf[[year,"geometry"]]
+    gdf = gpd.GeoDataFrame(gdf[[str(year),"geometry"]])
 
     fig, ax = plt.subplots(1, 1)
 
     # Need to figure out how to specify colorbar ranges.
-    gdf.plot(column=year,
+    gdf.plot(column=str(year),
              ax=ax,
              legend=True,
-             legend_kws={'label':"Vegetation Carbon Stock (tonnes)"},
-             cmap = 'summer',
+             legend_kwds={'label':"Vegetation Carbon Stock (tonnes)"},
+             cmap = 'summer_r',
+             norm=colors.LogNorm(vmin=vcs_range[0], vmax=vcs_range[1]),
     )
 
-    ax.set_axis_off();
+    ax.set_axis_off()
+    plt.show()
 
 
 def plot_vcs_differences_map(gdf, init_year, last_year):
@@ -205,16 +208,52 @@ def plot_vcs_differences_map(gdf, init_year, last_year):
     country and between the two specified years.
     """
 
-    diff = vcs_differences(gdf, init_year, last_year, last_year - init_year)
-
+    diff = gpd.GeoDataFrame(vcs_differences(gdf, init_year, last_year, last_year - init_year))
+    col = str(init_year)+"-"+str(last_year)
+    palette = sns.diverging_palette(20, 200, s=95, l=70, sep=1, as_cmap=True)
     fig, ax = plt.subplots(1, 1)
-    diff.plot(column=str(init_year)+"-"+str(last_year),
+    diff.plot(column=col,
               ax=ax,
               legend=True,
-              legend_kws={'label':"Vegetation Carbon Stock Relative Change"},
-              cmap = 'RdBu',
+              legend_kwds={'label':"Relative Change of Vegetation Carbon Stock \n" + str(init_year)+"-"+str(last_year)},
+              cmap = palette, #sns.color_palette("coolwarm", as_cmap=True),#sns.color_palette("Spectral", as_cmap=True), #'RdBu',
+              norm = colors.TwoSlopeNorm(vmin=diff[col].min(), vcenter=0., vmax=diff[col].max())
     )
-    ax.set_axis_off();
+    ax.set_axis_off()
+    plt.show()
+
+
+def plot_carbon_stock_cummulative_distribution(gdf,year):
+    """
+    Plots the distribution of vegetation carbon stock across countries for a
+    specified year.
+    :param gdf: is the dataset.
+    :param year: is the year of the analysis.
+    :return: a figure depicting the distribution of vegetation carbon stocks
+    across countries.
+    """
+
+    gdf = gdf[[str(year),"geometry"]]
+    gdf[str(year)] = gdf[str(year)]/gdf[str(year)].sum()*100
+
+    # fig, ax = plt.subplots(1, 1)
+    sns.set_style("darkgrid", {"axes.facecolor": "0.925"})
+    # palette = sns.color_palette("pastel")
+    palette = sns.set_palette("pastel",color_codes=True)
+    g = sns.displot(data=gdf,
+                # ax=ax,
+                y=str(year),
+                kind="ecdf",
+                palette = palette,
+                color = "r"
+                # fill=True,
+                # cut=0
+    )
+    g.axes[0,0].set_xlabel("Proportion of countries")
+    g.axes[0,0].set_ylabel("Percentage of \n World's Vegetation Carbon Stock")
+    # g.axes[0,0].set_xscale("log")
+    g.axes[0,0].set_yscale("log")
+    plt.show()
 
 
 def plot_carbon_stock_distribution(gdf,year):
@@ -227,18 +266,29 @@ def plot_carbon_stock_distribution(gdf,year):
     across countries.
     """
 
-    gdf = gdf[[year,"geometry"]]
+    gdf = gdf[[str(year),"geometry"]]
+    gdf = gdf.drop( gdf[gdf[str(year)]<10.0].index )
+    # gdf[str(year)] = gdf[str(year)]/gdf[str(year)].sum()*100
 
-    fig, ax = plt.subplots(1, 1)
-
-    sns.displot(data=gdf,
-                ax=ax,
-                x=year,
-                kind="kde",
-                fill=True,
-                cut=0
+    # fig, ax = plt.subplots(1, 1)
+    sns.set_style("darkgrid", {"axes.facecolor": "0.925"})
+    # palette = sns.color_palette("pastel")
+    palette = sns.set_palette("pastel",color_codes=True)
+    g = sns.displot(data=gdf,
+                # ax=ax,
+                x=str(year),
+                kind="hist",
+                palette = palette,
+                color = "b",
+                log_scale = (True,False),
+                kde=True
+                # fill=True,
+                # cut=0
     )
-
+    g.axes[0,0].set_ylabel("Number of countries")
+    g.axes[0,0].set_xlabel("Vegetation carbon stock (tonnes)")
+    # g.axes[0,0].set_xscale("log")
+    g.axes[0,0].set_yscale("log")
     plt.show()
 
 
@@ -257,15 +307,30 @@ def plot_difference_vs_average(gdf, init_year, last_year):
     diff = vcs_differences(gdf, init_year, last_year, last_year - init_year)
     gdf0 = gdf[[str(init_year),"name"]]
 
-    gdf = pd.merge(diff, gdf0, on = ["name"])
+    gdf1 = pd.merge(diff, gdf0, on = ["name"])
+    gdf1 = gdf1.drop( gdf1[gdf1[str(init_year)]<10.0].index )
 
-    fig, ax = plt.subplots(1, 1)
+    # fig, ax = plt.subplots(1, 1)
 
-    sns.jointplot(data=gdf,
-                  ax=ax,
+    g = sns.jointplot(data=gdf1,
+                  # ax=ax,
                   x=str(init_year),
-                  y=str(init_year)+"-"+str(last_year)
+                  y=str(init_year)+"-"+str(last_year),
+                  alpha = .5,
+                  s=35,
+                  edgecolor=".2",
+                  linewidth=.5,
+                  marginal_kws=dict(log_scale=(True,False)),
     )
+    g.set_axis_labels( xlabel = "Vegetation carbon stock for " + str(init_year),
+                       ylabel = "Relative change in vegetation carbon between \n"+str(init_year)+" and "+str(last_year)
+                     )
+    g.ax_joint.set_xscale('log')
+    g.ax_marg_x.set_xscale('log')
+
+    # g.axes[0,0].set_ylabel("Relative change in vegetation carbon between "+str(init_year)+" and "+str(last_year))
+    # g.axes[0,0].set_xscale("log")
+    plt.show()
 
 
 
@@ -274,12 +339,30 @@ vcs_df = merge_vcs_all_years(file_list)
 countries_gdf = load_countries_polygon_data("./temp_data/2015_gaul_dataset_mod_2015_gaul_dataset_global_countries_1.shp")
 gdf = join_vcs_with_country(vcs_df,countries_gdf)
 diff_all = vcs_differences(gdf,2001,2005,4)
-print(diff_all)
+# print(diff_all)
 winners, losers = get_winners_and_losers(gdf,5,2001,2005)
-print(winners)
-print(losers)
-plot_vcs_dynamics(gdf,winners)
-plot_vcs_dynamics(gdf,losers)
+# print(winners)
+# print(losers)
+# plot_vcs_dynamics(gdf,winners)
+# plot_vcs_dynamics(gdf,losers)
+
+# Remove the very small vegetation carbon stocks equal to zero by one to allow
+# for better visualization. This would not be necessary if plotting carbon stock
+# density.
+# years = ["2001","2002","2003","2004","2005"]
+# gdf2 = gpd.GeoDataFrame(gdf)
+# for year in years:
+#     gdf2 = gdf.drop( gdf[gdf[str(year)]<1000000.0].index )
+#
+# vmin = gdf[years].min().min()
+# vmax = gdf[years].max().max()
+# vcs_range = (vmin,vmax)
+# print(vcs_range)
+# plot_vcs_map(gdf, 2001, vcs_range)
+# plot_vcs_differences_map(gdf, 2001, 2005)
+# plot_carbon_stock_cummulative_distribution(gdf,2001)
+plot_carbon_stock_distribution(gdf,2001)
+# plot_difference_vs_average(gdf, 2001, 2005)
 
 #
 # def plot_vcs_per_year(vcs_files, countries_gdf):
